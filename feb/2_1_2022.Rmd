@@ -1,12 +1,3 @@
----
-title: "2_1_2022"
-output: html_document
----
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
-
 ## Febuary 1st, 2022
 
 * Received a tour of the lab, set up paperwork and received key card
