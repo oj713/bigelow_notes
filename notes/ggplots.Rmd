@@ -117,3 +117,23 @@ However, in order to make code more efficient we can move the mapping variable t
 ```{r, message=FALSE}
 ggplot(data=mpg, mapping=aes(x=displ, y=hwy)) + geom_point(mapping=aes(color=class)) + geom_smooth()
 ```
+
+## Further Notes
+* **geom_jitter()** is equivalent to `geom_point(position="jitter")`. This jitters the points slighly out of their original position, which although detrimental at small scales is useful at large scales because it betters shows points that overlap. 
+* Alternate Coordinate Systems
+  * **coord_quickmap()** sets the correct aspect ratio for maps, which is useful for spatial data.
+
+```{r}
+#an example of jitter
+ggplot(data=mpg) + geom_jitter(mapping = aes(x=displ, y=hwy))
+#an example of quickmap coordinates
+nz <- map_data("nz")
+#note messed up ratio
+ggplot(nz, aes(long, lat, group = group)) +
+  geom_polygon(fill = "white", colour = "black")
+#note accurate ratio
+ggplot(nz, aes(long, lat, group = group)) +
+  geom_polygon(fill = "white", colour = "black") +
+  coord_quickmap()
+```
+
