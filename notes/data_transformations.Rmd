@@ -1,0 +1,94 @@
+---
+title: "Data Transformation"
+output: html_document
+---
+
+## dplyr
+
+https://r4ds.had.co.nz/transform.html
+
+Example data set: `nycflights13::flights` contains all flights departing NYC in 2013. 
+
+```{r, message=FALSE}
+library(nycflights13)
+library(tidyverse)
+flights
+```
+
+the `dplyr` package has 5 essential functions that are useful for most tasks needed in data manipulation. 
+
+### 1. Filter
+`filter(dataframe, ...filtering expressions...)`
+
+* Filters observations by their values
+* doesn't alter original dataframe -- must save result to new variable
+
+Note: don't use == for floating point calculations, use `near(a, b)` instead
+
+
+```{r}
+#selecting flights leaving in november or december
+#note use of %in% 
+filter(flights, month %in% c(11, 12))
+```
+
+### 2. Arrange
+`arrange(dataframe, ... column names ...)`
+
+* Reorders rows 
+* when providing more than one column name, each additional column will be used to break ties in values of preceding columns
+* **desc(column_name)** reorders by given column in descending order
+
+```{r}
+arrange(flights, desc(dep_delay))
+```
+
+### 3. Select
+`select(dataframe, ...column names...)`
+
+* Allows you to zoom in on a useful subset of variables
+* Example operations
+  * **c1:c2** selects columns between c1 and c2
+  * **-(.)** excludes any columns in the parentheses
+  * **starts_with("str")** matches columns starting with given string
+  * **ends_width("str")** matches columns ending with given string
+  * **contains("str")** matches columns containing given string
+* **rename()** is a variant of select() that can rename columsn without dropping variables note explicitly mentioned
+* **everything()** can be used with **select()** if there are columns that would be best at the start of the data frame
+
+```{r}
+select(flights, year:day)
+rename(flights, tail_num=tailnum)
+select(flights, time_hour, air_time, everything())
+```
+
+### 4. Mutate
+`mutate(dataframe, new_column = . , ...)`
+
+* Adds new columns that are functions of existing columns 
+* adds columns at end of dataset
+* use **transmute()** if only want to keep new variables
+
+```{r}
+#want to see new columns
+flights_sml <- select(flights, year:day, ends_with("delay"), distance, air_time)
+mutate(flights_sml, gain=dep_delay - arr_delay, speed = distance/air_time * 60)
+transmute(flights_sml, hours = air_time/60)
+```
+
+### 5. Summarize
+
+* collapses a data frame to a single row
+* mostly useful when paired with group_by() 
+* can use mean(), median(), sd(), etc. 
+
+```{r}
+#Note use of na.rm = TRUE --- removes all null values, as otherwise any null would collapse entire output to null
+flights %>% 
+  group_by(year, month, day) %>%
+    summarize(mean=mean(dep_delay, na.rm = TRUE))
+```
+
+* during aggregation, it's useful to include a count, or count of non-missing values, in order to prevent drawing conclusions from small data sets. 
+
+
