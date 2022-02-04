@@ -1,0 +1,231 @@
+---
+title: "TidyModels Recipes"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r, message=FALSE}
+library(nycflights13) #for flight data
+library(tidymodels) #primarily for recipes package
+library(skimr) #for variable summaries
+library(lubridate) #for converting from date-time to date
+```
+
+https://www.tidymodels.org/start/recipes/
+
+The goal of this example exercise is to predict whether a plane arrives more than 30 minutes late. 
+
+First, we make initial changes to the data.
+
+```{r}
+#Setting a seed fixes random numbers to enable our analysis to be reproducible
+set.seed(123)
+
+flights_data <-
+  nycflights13::flights |>
+  #using mutate() to add new columns that are functions of prior ones
+  mutate(
+    #convert arrival delay to a factor
+    #ifelse(condition, yes, no)
+    arr_delay = ifelse(arr_delay >= 30, "late", "on_time"),
+    #using factor() to transform the arr_delay vector into a factor
+    arr_delay = factor(arr_delay),
+    #converting date-time to just date
+    date = lubridate::as_date(time_hour)
+  ) |>
+  #adding on weather data
+  #inner_join adds rows from y to x based on if "key values" match 
+  #in this case, weather data is matched to the departure origin/date
+  dplyr::inner_join(nycflights13::weather, by=c("origin", "time_hour")) |>
+  #only retain needed columns
+  select(dep_time, flight, origin, dest, air_time, distance, carrier, 
+         date, arr_delay, time_hour) |>
+  #exclude missing data 
+  na.omit() |>
+  #when creating models, better to have qualitative be factors, not strings
+  dplyr::mutate_if(is.character, as.factor)
+```
+
+Just for informative purposes, we can count how many flights arrive late:
+
+```{r}
+flights_data |>
+  count(arr_delay) |>
+  #count creates a tbl where the number of each occurence is titled n
+  mutate(prop = n/sum(n))
+```
+
+Note that 16% of flights were late. 
+
+Next, we can review our flight data. 
+
+```{r}
+glimpse(flights_data)
+```
+
+We will be using a logistic regression model to predict whether flights will be on time. A logistic regression model is effective in circumstances where we are predicting "yes/no", so it's important that our outcome variable arr_delay is a factor rather than a string vector. 
+
+`flight` and `time_hour` are not predictor variables, but identification variables that we can use to troubleshoot. 
+
+## Data Splitting 
+
+Next, we split the data into training and testing sets using `rsample`
+
+```{r}
+set.seed(222)
+
+data_split <- initial_split(flights_data, prob = 3/4)
+
+train_data <- training(data_split)
+test_data <- testing(data_split)
+```
+
+## Create Recipe and Roles
+
+Note that many of these code snippets are building one completed code segment.
+
+Creating a recipe allows us to create some new predictors and conduct any necessary pre-processing. 
+
+First, we initiate a recipe using `recipe(formula, data)`:
+* **Formula**: the variable on the left hand side of the tilde `~` is the model outcome, and the right side is predictors. Predictors can be listed by name, or the . can indicate all other variables as predictors.
+* **Data**: the data set used to create the model, which is typically the training data. 
+
+```{r, eval=FALSE}
+flights_rec <- recipe(arr_delay ~ ., data=train_data)
+```
+
+Next, we would like to indicate our id variables by updating their roles. By using the update_role() function, the recipe will know that those variables have a custom role and should not be included in the model. This is useful because it allows us to keep the variables in the data. 
+
+```{r}
+flights_rec <-
+  recipe(arr_delay ~ ., data=train_data) |>
+  update_role(flight, time_hour, new_role="ID")
+#use summary to view current set of variables and roles
+summary(flights_rec)
+```
+
+The date of the flight might affect arrival time. We can convert the date column into useable figures by deriving info that might be more important -- day of the week, month, and holidays. This can be done by adding steps to the recipe 
+
+```{r, eval=FALSE}
+flights_rec <-
+  recipe(arr_delay ~ ., data=train_data) |>
+  update_role(flight, time_hour, new_role="ID") |>
+  #create two factor columns with appropriate day of the week and month
+  step_date(date, features = c("dow", "month")) |>
+  #create binary variable - is date a holdiay?
+  step_holiday(date, holidays = timeDate::listHolidays("US"), 
+               #deleting the original date column
+               keep_original_cols = FALSE)
+```
+
+Finally, the simple logistic regression number requires entirely numeric predictors. We can convert the nominal variables into **dummy variables**: binary values for each level of the factor. R doesn't automatically make these, so we have to add it as a step.
+
+```{r, eval=FALSE}
+flights_rec <-
+  recipe(arr_delay ~ ., data=train_data) |>
+  update_role(flight, time_hour, new_role="ID") |>
+  step_date(date, features = c("dow", "month")) |>
+  step_holiday(date, holidays = timeDate::listHolidays("US"), 
+               keep_original_cols = FALSE) |>
+  #note use of all_nominal_predictors()
+  step_dummy(all_nominal_predictors)
+```
+
+Since `carrier` and `dest` have infrequently occuring factor values, there might have been dummy variables created for values that don't exist in training set. 
+
+```{r}
+test_data |>
+  distinct(dest) |>
+  #returns rows with no match in test_data
+  anti_join(train_data)
+```
+
+This means that a dummy variable column that only contains zeros will be created, aka a "zero-variance predictor" that contains no information and might cause warnings and other issues. The final step here is to remove zero variance predictors. 
+
+**FINAL RECIPE**
+```{r recipe_compilation}
+flights_rec <-
+  recipe(arr_delay ~ ., data=train_data) |>
+  update_role(flight, time_hour, new_role="ID") |>
+  step_date(date, features = c("dow", "month")) |>
+  step_holiday(date, holidays = timeDate::listHolidays("US"), 
+               keep_original_cols = FALSE) |>
+  step_dummy(all_nominal_predictors()) |>
+  step_zv(all_predictors())
+```
+
+## Fitting a model with a recipe 
+
+Using the parsnip package, we first build a model specification. 
+
+```{r build_model}
+lr_mod <-
+  logistic_reg() |>
+  set_engine("glm")
+```
+
+The model and recipe will be used together in several steps. This process can be complicated, but we can simplify it with a **model workflow**, which pairs and model and recipe together. This makes sense because different models often need different recipes. We can use the `workflows` package to bundle the model and recipe. 
+
+```{r create_and_fit_workflow}
+flights_wkf <-
+  workflows::workflow() |>
+  add_model(lr_mod) |>
+  add_recipe(flights_rec)
+
+flights_wkf
+
+#preparing the recipe and training the model with one function
+flights_fit <-
+  flights_wkf |> 
+  fit(data = train_data)
+```
+
+`flights_fit` contains a finalized recipe and fitted model objects. We can extract the model and recipe objects using `extract_fit_parsnip()` and `extract_recipe()` respectively. We use the `broom::tidy()` function to get a tidy result from the extracted model. 
+
+```{r extract_fit}
+flights_fit |> extract_fit_parsnip() |> broom::tidy()
+```
+
+## Predicting using trained workflow
+
+Now we can use the trained workflow to predict with our test data. 
+
+```{r}
+predict(flights_fit, test_data)
+```
+
+We can retrieve actual probabilities using `type = "prob"` or by using augment() to save both probabilities and predicted class.
+
+```{r}
+flights_aug <-
+  augment(flights_fit, test_data)
+
+#Data look like:
+flights_aug |> select(arr_delay, time_hour, flight, .pred_class, .pred_on_time)
+```
+
+We will evaluate the effectiveness of the model using the AUC-ROC curve metric, computed using the yardstick() package. 
+
+```{r}
+#generating the roc curve
+flights_aug |>
+  #roc_curve(data, truth, ...) where ... is the predicted data
+  roc_curve(truth=arr_delay, .pred_late) |>
+  autoplot()
+
+#estimating area under the curve
+flights_aug |>
+  roc_auc(truth = arr_delay, .pred_late)
+```
+
+
+
+
+
+
+
+
+
+
