@@ -110,12 +110,14 @@ segment.
 Creating a recipe allows us to create some new predictors and conduct
 any necessary pre-processing.
 
-First, we initiate a recipe using `recipe(formula, data)`: \*
-**Formula**: the variable on the left hand side of the tilde `~` is the
-model outcome, and the right side is predictors. Predictors can be
-listed by name, or the . can indicate all other variables as predictors.
-\* **Data**: the data set used to create the model, which is typically
-the training data.
+First, we initiate a recipe using `recipe(formula, data)`:
+
+-   **Formula**: the variable on the left hand side of the tilde `~` is
+    the model outcome, and the right side is predictors. Predictors can
+    be listed by name, or the . can indicate all other variables as
+    predictors.
+-   **Data**: the data set used to create the model, which is typically
+    the training data.
 
 ``` r
 flights_rec <- recipe(arr_delay ~ ., data=train_data)
