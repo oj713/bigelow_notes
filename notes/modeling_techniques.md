@@ -8,11 +8,13 @@ Modeling Techniques
 -   MaxEnt
 -   Artificial Neural Networks
 
-### Linear and Logistic Regression
+# Linear and Logistic Regression
 
 -   model finds best fit linear line between IV and DV
 -   Linear regression provides continuous output, while logistic
     regression is best for discrete classification output (eg. yes/no)
+
+### Example using tidymodels
 
 ``` r
 example_logistic <- logistic_reg() |> set_engine("glm")
@@ -22,7 +24,39 @@ example_linear <- linear_reg() |>
   set_mode("regression")
 ```
 
-### GAMs
+### Example using motorcycle crash data
+
+``` r
+mcycle <- MASS::mcycle
+
+#examine mcycle data frame 
+head(mcycle)
+```
+
+    ##   times accel
+    ## 1   2.4   0.0
+    ## 2   2.6  -1.3
+    ## 3   3.2  -2.7
+    ## 4   3.6   0.0
+    ## 5   4.0  -2.7
+    ## 6   6.2  -2.7
+
+``` r
+plot(mcycle)
+```
+
+![](modeling_techniques_files/figure-gfm/unnamed-chunk-2-1.png)<!-- -->
+
+``` r
+#fit a linear model and plot it 
+#note that se plots standard error
+lm(accel ~ times, data=mcycle) |>
+  termplot(partial.resid = TRUE, se = TRUE)
+```
+
+![](modeling_techniques_files/figure-gfm/unnamed-chunk-2-2.png)<!-- -->
+
+# GAMs
 
 <https://noamross.github.io/gams-in-r-course/>
 
@@ -37,3 +71,130 @@ the structure of their predictions.
     -   the basis functions are summed together with varying weights
     -   this means that a single nonlinear relationship has several
         parameters, creating a more complex model than something linear
+    -   coefficients for each variable can be extracted with the
+        `coef()` function
+
+### Example using motorcycle crash data
+
+``` r
+library(mgcv)
+```
+
+    ## Loading required package: nlme
+
+    ## This is mgcv 1.8-39. For overview type 'help("mgcv-package")'.
+
+``` r
+library(ggplot2)
+```
+
+We can create a non-linear GAM model using mgcv’s `gam()` function. To
+specify that we want to create a smooth relation between the IV and DV,
+we encase the DV in the `s()` function.
+
+``` r
+# fit the model
+gam_mod <- mgcv::gam(accel ~ s(times), data=mcycle)
+
+# plot the results
+plot(gam_mod, residuals=TRUE, pch = 1)
+```
+
+![](modeling_techniques_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
+
+``` r
+# extract model coefficients
+coef(gam_mod)
+```
+
+    ## (Intercept)  s(times).1  s(times).2  s(times).3  s(times).4  s(times).5 
+    ##  -25.545865  -63.718008   43.475644 -110.350132  -22.181006   35.034423 
+    ##  s(times).6  s(times).7  s(times).8  s(times).9 
+    ##   93.176458   -9.283018 -111.661472   17.603782
+
+`coef()` tells us that the smooth for times consists of 9 basis
+functions, each with their own coefficient.
+
+### Basis Functions and Smoothing
+
+-   Since GAMs are so flexible, it is easy for them to become overfitted
+    to the data. This makes smoothing important.
+    -   **overfitting** is when the model is too finely tuned to noise
+        and can’t adapt well to new data
+    -   **fit = likelihood - *λ*⋅ wiggliness**
+        -   finding the right *λ*, or **smoothing parameter**, is key
+        -   GAMs can select their own smoothing parameter, be passed a
+            specific value, or be given a method for selecting the best
+            value.
+        -   **REML: Restricted Maximum Likelihood ** method is highly
+            recommended.
+
+``` r
+# Setting a fixed smoothing parameter
+gam(y ~ s(x), data = dat, sp = .1)
+gam(y ~ s(x, sp = 0.1), data=dat)
+# Smoothing via restricted maximum likelihood
+gam(y ~s(x), data = dat, method = "REML")
+```
+
+-   A higher number of basis functions can also affect wiggliness
+
+``` r
+# Specifying number of basis functions
+gam(y ~ s(x, k = 3), data = dat, method = "REML")
+gam(y ~ s(x, k = 10), data = dat, method = "REML")
+```
+
+### Multivariate Regression with GAMs
+
+``` r
+# retrieving example data
+library(gamair)
+data("mpg", package="gamair")
+```
+
+-   We can add further variables to a model by adding them into the
+    formula with a plus sign
+    -   the GAM creates models for each variable and then adds them
+        together – hence, additive variable.
+
+``` r
+mod_city <- gam(city.mpg ~ s(weight) + s(length) + s(price), data=mpg, method = "REML")
+
+plot(mod_city, residuals=TRUE, pages=1)
+```
+
+![](modeling_techniques_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
+
+-   Not every variable has to be wrapped in the `s()` smoothing function
+    – can choose to evaluate them linearly instead
+    -   in practice, all continuous variables are wrapped
+    -   useful for categorical variables: creates a fixed effect for
+        each level of the category
+
+``` r
+# Introducing categorical variables
+mod_city2 <- gam(city.mpg ~ s(weight) + s(length) + s(price) + fuel + drive + style, data=mpg, method = "REML")
+
+plot(mod_city2, all.terms = TRUE, residuals=TRUE, pages = 1)
+```
+
+![](modeling_techniques_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
+
+-   **Factor-smooth interaction** : GAM formulas can also fit different
+    smooths for different categorical variables
+    -   usually, also want to include a varying intercept in case the
+        categories are different in overall means
+
+``` r
+# Using factor-smooth interaction
+mod_city3 <- gam(city.mpg ~ s(weight, by=drive) + s(length, by=drive) + s(price, by=drive) + drive, data=mpg, method = "REML")
+
+plot(mod_city3, residuals=TRUE, all.terms=TRUE, pages = 2)
+```
+
+![](modeling_techniques_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->![](modeling_techniques_files/figure-gfm/unnamed-chunk-10-2.png)<!-- -->
+
+### Regression Trees
+
+<https://youtu.be/g9c66TUylZ4>
