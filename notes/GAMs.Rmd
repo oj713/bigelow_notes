@@ -9,15 +9,16 @@ knitr::opts_chunk$set(echo = TRUE)
 
 * Recap: Linear and Logistic Regression
 * Introduction to GAMs
-* Basis Functions and Smoothing
-* Multivariate Regression with GAMs
-* Interpreting GAMs
-* Visualizing GAMs
-* Model Checking 
+  * Basis Functions and Smoothing
+  * Multivariate Regression with GAMs
+  * Interpreting GAMs
+  * Visualizing GAMs
+  * Model Checking 
 * 2D Smooths and Spatial Data
-* Plotting GAM Interactions
-* Visualizing Categorical-Continuous interactions
-* Interactions with Different Scales : Tensor Smooths
+  * Plotting GAM Interactions
+  * Visualizing Categorical-Continuous interactions
+  * Interactions with Different Scales : Tensor Smooths
+* Logistic GAMs for Classification
 
 ## Recap: Linear and Logistic Regression ##
 
@@ -49,7 +50,7 @@ lm(accel ~ times, data=mcycle) |>
   termplot(partial.resid = TRUE, se = TRUE)
 ```
 
-## Introduction to GAMs ##
+# Introduction to GAMs #
 
 https://noamross.github.io/gams-in-r-course/
 
@@ -237,7 +238,7 @@ We can check for concurvity using the `concurvity(model, ...)` function. This mo
  concurvity(mod_city, full=FALSE)
  ```
  
-## 2D Smooths and Spatial Data ##
+# 2D Smooths and Spatial Data #
 
 **Interactions**
 
@@ -373,8 +374,46 @@ summary(tensor_mod2)
 plot(tensor_mod2, pages=1)
 ```
 
+# Logistic GAMs for Classification #
 
+* GAMs can model many types of outcomes besides continuous numeric values
 
+**Logistic Functions**
+
+* when modelling binary outcomes, model prediction will be a probability between 0 and 1
+  * GAMs can have an outcome of any number => convert GAM output to a probability with logistic function 
+* transformation converting numbers of any value to probabilities 
+  * **log-odds**: log of the ratio of positive outcomes to negative outcomes
+  * `plogis()`
+* **logit function**: inverse of logistic function, translates probabilities to log-odds
+  * `qlogis()`
+
+```{r}
+# logit and logistic functions are inverts of each other 
+qlogis(plogis(.5))
+
+# a .25 probability converts to log odds by taking log of ratio of positives (1) to negatives (3)
+qlogis(.25) == log(1/3)
+```
+
+to use logistic/logit function to fit a GAM, add `family=binomial` argument to GAM call
+  * outputs are on the log-odds scale -> must convert to probabilities using logistic function
+
+the new dataset, `dataCar` contains information on insurance policies for cars. the outcome `clm` represents whether a claim was taken out.
+
+```{r}
+library(insuranceData)
+
+# examine csale data frame
+head(dataCar)
+str(dataCar)
+
+# fit logistic model of claim as a function of veh_value
+log_mod <- gam(clm ~ s(veh_value), data = dataCa, family = binomial, method = "REML")
+
+# calculating the probability at the mean
+plogis(coef(log_mod)[1])
+```
 
 
 
