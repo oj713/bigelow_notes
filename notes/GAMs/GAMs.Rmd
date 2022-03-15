@@ -7,8 +7,15 @@ output: github_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(tidymodels)
+library(mgcv)
+library(ggplot2)
+```
+
+* GAMs and Tidymodels
 * Recap: Linear and Logistic Regression
-* Introduction to GAMs
+* Introduction to GAMs and mgcv
   * Basis Functions and Smoothing
   * Multivariate Regression with GAMs
   * Interpreting GAMs
@@ -19,8 +26,45 @@ knitr::opts_chunk$set(echo = TRUE)
   * Visualizing Categorical-Continuous interactions
   * Interactions with Different Scales : Tensor Smooths
 * Logistic GAMs for Classification
+  * Visualizing Logistic GAMs
+* Predicting with GAMs
 
-## Recap: Linear and Logistic Regression ##
+# GAMs and Tidymodels #
+
+https://parsnip.tidymodels.org/reference/gen_additive_mod.html
+
+`parsnip::gen_additive_mod()` allows you to use a GAM within the tidymodels framework. 
+
+```{r, eval = FALSE} 
+gen_additive_mod(
+  # character string for the prediction outcome mode
+  mode = c("unknown", "regression", "classification") [1], 
+  # if TRUE, model has the ability to eliminate a predictor via penalization
+  # increasing adjust_deg_free increases likelihood of removing predictors
+  select_features = c(NULL, TRUE, FALSE)[1],
+  # only if select_features = TRUE
+  # multiplier for smoothness -- increase beyond 1 for smoother models 
+  adjust_deg_free = NULL, 
+  engine = "mgcv"
+)
+```
+
+A GAM model in tidymodels should be fit with a model formula s.t. smooth terms can be specified 
+
+```{r}
+mod <- gen_additive_mod() |>
+        set_engine("mgcv") |>
+        set_mode("regression") |>
+        fit(mpg ~ wt + gear + cyl + s(disp), data = mtcars, method = "REML")
+summary(mod$fit)
+```
+
+### Preprocessing requirements ###
+
+* Factor/categorical predictors must be converted to numeric values (dummy or indicator variables)
+  * when using formula method via. fit(), parsnip converts factors to indicators automatically
+
+# Recap: Linear and Logistic Regression #
 
 * model finds best fit linear line between IV and DV
 * Linear regression provides continuous output, while logistic regression is best for discrete classification output (eg. yes/no)
@@ -50,7 +94,7 @@ lm(accel ~ times, data=mcycle) |>
   termplot(partial.resid = TRUE, se = TRUE)
 ```
 
-# Introduction to GAMs #
+# Introduction to GAMs and mgcv #
 
 https://noamross.github.io/gams-in-r-course/
 
@@ -63,11 +107,6 @@ GAMs are a middle ground between simple, highly interpretable models (eg. linear
   * coefficients for each variable can be extracted with the `coef()` function
   
 **Example**
-
-```{r}
-library(mgcv)
-library(ggplot2)
-```
 
 We can create a non-linear GAM model using mgcv's `gam()` function. To specify that we want to create a smooth relation between the IV and DV, we encase the DV in the `s()` function. 
 
@@ -272,7 +311,7 @@ summary(mod2d)
 coef(mod2d)
 ```
 
-## Plotting GAM Interactions ##
+### Plotting GAM Interactions ###
 
 `mgcv::plot()` contains basic plotting options for interactions.
 
@@ -309,7 +348,7 @@ vis.gam(x, # model
         ...)
 ```
 
-## Visualizing Categorical-Continuous Interactions ##
+### Visualizing Categorical-Continuous Interactions ###
 
 **Factor-smooth**
 
@@ -399,23 +438,97 @@ qlogis(.25) == log(1/3)
 to use logistic/logit function to fit a GAM, add `family=binomial` argument to GAM call
   * outputs are on the log-odds scale -> must convert to probabilities using logistic function
 
-the new dataset, `dataCar` contains information on insurance policies for cars. the outcome `clm` represents whether a claim was taken out.
+```{r, echo=FALSE, message=FALSE}
+library(dplyr)
+flights <-
+  nycflights13::flights |>
+  mutate(
+    #convert arrival delay to a factor
+    #ifelse(condition, yes, no)
+    arr_delay = ifelse(arr_delay >= 30, "late", "on_time"),
+    #using factor() to transform the arr_delay vector into a factor
+    arr_delay = factor(arr_delay),
+    #converting date-time to just date
+    date = lubridate::as_date(time_hour)
+  ) |>
+  #only retain needed columns
+  select(dep_time, flight, origin, dest, air_time, distance, carrier, 
+         date, arr_delay, time_hour) |>
+  #exclude missing data 
+  na.omit() |>
+  #when creating models, better to have qualitative be factors, not strings
+  dplyr::mutate_if(is.character, as.factor)
+```
 
 ```{r}
-library(insuranceData)
-
+# we are using the nycflights 13 dataset also used in recipe_example.md
 # examine csale data frame
-head(dataCar)
-str(dataCar)
+head(flights)
+str(flights)
 
-# fit logistic model of claim as a function of veh_value
-log_mod <- gam(clm ~ s(veh_value), data = dataCa, family = binomial, method = "REML")
+# fit logistic model of arr_delay as a function of air_time
+log_mod <- gam(arr_delay ~ s(air_time), data = flights, family = binomial, method = "REML")
 
 # calculating the probability at the mean
 plogis(coef(log_mod)[1])
 ```
 
+### Visualizing Logistic GAMs ###
 
+When we plot the output of a logistic GAM we see the partial effect of smooths on the log-odds scale
+  * use `trans = plogis` argument to convert output to probability scale
+  * plotted results will be centered on .5 probability -- to include average intercept, use `shift = coef(binom_mod)[1]`
+    * also good to use `seWithMean = TRUE`
 
+```{r}
+plot(log_mod, 
+     trans=plogis, 
+     shift=coef(log_mod)[1], 
+     seWithMean=TRUE,
+     rug = FALSE,
+     shade = TRUE, 
+     shade.col = "pink")
+```
 
+# Predicting with GAMs #
+
+We can use the `predict()` function to make predictions from a GAM object. 
+
+```{r predict log mod }
+# running predict on the model yields a vector of predictions for training data 
+head(predict (log_mod))
+```
+
+By default, predict() function returns values on `type="link"` scale - scale on which model was fit to data.
+  * return results on probability scale by using `type = "response"`
+
+`se.fit = TRUE` includes a second element containing standard error for predictions
+  
+```{r}
+sefitpred <- predict(log_mod, type="response", se.fit=TRUE)
+
+head(sefitpred[[1]])
+head(sefitpred[[2]])
+```
+
+**Notes on logistic standard error**
+
+* Standard error for probabilities are approximate when using the probability scale, as errors are non-symmetrical
+* best way to create confidence intervals for logistic predictions is to build on log-odds scale and then convert to probability
+  * `plogis("link" predictions + errors)`
+  
+Use `type = "terms"` to produce a matrix showing contribution of each smooth to each prediction
+  * sum across each row is the overall probability 
+
+```{r}
+head(predict(log_mod, type = "terms"))
+```
+
+### Predictions on new data ###
+
+* to make predictions on new data, use `newdata` argument 
+
+```{r, eval=FALSE}
+test_predictions <- predict(trained_model, type = "response", newdata = test_df)
+```
 

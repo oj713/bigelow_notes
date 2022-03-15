@@ -1,3 +1,3 @@
 # Bigelow
 
-Personal notes and log of work completed during Bigelow internship
+Personal notes and log of work completed during Bigelow internship.

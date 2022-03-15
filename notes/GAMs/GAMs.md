@@ -1,19 +1,87 @@
 GAMs
 ================
 
+-   GAMs and Tidymodels
 -   Recap: Linear and Logistic Regression
--   Introduction to GAMs
--   Basis Functions and Smoothing
--   Multivariate Regression with GAMs
--   Interpreting GAMs
--   Visualizing GAMs
--   Model Checking
+-   Introduction to GAMs and mgcv
+    -   Basis Functions and Smoothing
+    -   Multivariate Regression with GAMs
+    -   Interpreting GAMs
+    -   Visualizing GAMs
+    -   Model Checking
 -   2D Smooths and Spatial Data
--   Plotting GAM Interactions
--   Visualizing Categorical-Continuous interactions
--   Interactions with Different Scales : Tensor Smooths
+    -   Plotting GAM Interactions
+    -   Visualizing Categorical-Continuous interactions
+    -   Interactions with Different Scales : Tensor Smooths
+-   Logistic GAMs for Classification
+    -   Visualizing Logistic GAMs
+-   Predicting with GAMs
 
-## Recap: Linear and Logistic Regression
+# GAMs and Tidymodels
+
+<https://parsnip.tidymodels.org/reference/gen_additive_mod.html>
+
+`parsnip::gen_additive_mod()` allows you to use a GAM within the
+tidymodels framework.
+
+``` r
+gen_additive_mod(
+  # character string for the prediction outcome mode
+  mode = c("unknown", "regression", "classification") [1], 
+  # if TRUE, model has the ability to eliminate a predictor via penalization
+  # increasing adjust_deg_free increases likelihood of removing predictors
+  select_features = c(NULL, TRUE, FALSE)[1],
+  # only if select_features = TRUE
+  # multiplier for smoothness -- increase beyond 1 for smoother models 
+  adjust_deg_free = NULL, 
+  engine = "mgcv"
+)
+```
+
+A GAM model in tidymodels should be fit with a model formula s.t. smooth
+terms can be specified
+
+``` r
+mod <- gen_additive_mod() |>
+        set_engine("mgcv") |>
+        set_mode("regression") |>
+        fit(mpg ~ wt + gear + cyl + s(disp), data = mtcars, method = "REML")
+summary(mod$fit)
+```
+
+    ## 
+    ## Family: gaussian 
+    ## Link function: identity 
+    ## 
+    ## Formula:
+    ## mpg ~ wt + gear + cyl + s(disp)
+    ## 
+    ## Parametric coefficients:
+    ##             Estimate Std. Error t value Pr(>|t|)    
+    ## (Intercept)  39.8408     6.4883   6.140 4.81e-06 ***
+    ## wt           -2.6809     1.2226  -2.193  0.04003 *  
+    ## gear          0.4033     0.5785   0.697  0.49351    
+    ## cyl          -2.0384     0.6994  -2.914  0.00844 ** 
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## Approximate significance of smooth terms:
+    ##           edf Ref.df     F p-value   
+    ## s(disp) 7.524  8.432 5.389 0.00101 **
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## R-sq.(adj) =  0.926   Deviance explained = 95.1%
+    ## GCV = 4.2252  Scale est. = 2.7036    n = 32
+
+### Preprocessing requirements
+
+-   Factor/categorical predictors must be converted to numeric values
+    (dummy or indicator variables)
+    -   when using formula method via. fit(), parsnip converts factors
+        to indicators automatically
+
+# Recap: Linear and Logistic Regression
 
 -   model finds best fit linear line between IV and DV
 -   Linear regression provides continuous output, while logistic
@@ -50,7 +118,7 @@ head(mcycle)
 plot(mcycle)
 ```
 
-![](GAMs_files/figure-gfm/unnamed-chunk-2-1.png)<!-- -->
+![](GAMs_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
 
 ``` r
 #fit a linear model and plot it 
@@ -59,9 +127,9 @@ lm(accel ~ times, data=mcycle) |>
   termplot(partial.resid = TRUE, se = TRUE)
 ```
 
-![](GAMs_files/figure-gfm/unnamed-chunk-2-2.png)<!-- -->
+![](GAMs_files/figure-gfm/unnamed-chunk-5-2.png)<!-- -->
 
-## Introduction to GAMs
+# Introduction to GAMs and mgcv
 
 <https://noamross.github.io/gams-in-r-course/>
 
@@ -81,18 +149,6 @@ the structure of their predictions.
 
 **Example**
 
-``` r
-library(mgcv)
-```
-
-    ## Loading required package: nlme
-
-    ## This is mgcv 1.8-39. For overview type 'help("mgcv-package")'.
-
-``` r
-library(ggplot2)
-```
-
 We can create a non-linear GAM model using mgcv’s `gam()` function. To
 specify that we want to create a smooth relation between the IV and DV,
 we encase the DV in the `s()` function.
@@ -105,7 +161,7 @@ gam_mod <- mgcv::gam(accel ~ s(times), data=mcycle)
 plot(gam_mod, residuals=TRUE, pch = 1)
 ```
 
-![](GAMs_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
+![](GAMs_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
 
 ``` r
 # extract model coefficients
@@ -169,7 +225,7 @@ mod_city <- gam(city.mpg ~ s(weight) + s(length) + s(price), data=mpg, method = 
 plot(mod_city, residuals=TRUE, pages=1)
 ```
 
-![](GAMs_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
+![](GAMs_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
 
 -   Not every variable has to be wrapped in the `s()` smoothing function
     – can choose to evaluate them linearly instead
@@ -184,7 +240,7 @@ mod_city2 <- gam(city.mpg ~ s(weight) + s(length) + s(price) + fuel + drive + st
 plot(mod_city2, all.terms = TRUE, residuals=TRUE, pages = 1)
 ```
 
-![](GAMs_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
+![](GAMs_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
 
 -   **Factor-smooth interaction** : GAM formulas can also fit different
     smooths for different categorical variables
@@ -198,7 +254,7 @@ mod_city3 <- gam(city.mpg ~ s(weight, by=drive) + s(length, by=drive) + s(price,
 plot(mod_city3, residuals=TRUE, all.terms=TRUE, pages = 2)
 ```
 
-![](GAMs_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->![](GAMs_files/figure-gfm/unnamed-chunk-10-2.png)<!-- -->
+![](GAMs_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->![](GAMs_files/figure-gfm/unnamed-chunk-12-2.png)<!-- -->
 
 ## Interpreting GAMs
 
@@ -286,7 +342,7 @@ plot(gam_mod,
      shift = coef(gam_mod)[1])
 ```
 
-![](GAMs_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
+![](GAMs_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->
 
 ## Model Checking
 
@@ -297,7 +353,7 @@ We can check that we have a well-fit GAM using `gam.check()`
 gam.check(gam_mod)
 ```
 
-![](GAMs_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
+![](GAMs_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
 
     ## 
     ## Method: GCV   Optimizer: magic
@@ -376,7 +432,7 @@ concurvity(mod_city, full=FALSE)
     ## s(length) 6.889670e-27 7.270491e-01 1.000000e+00 4.488621e-01
     ## s(price)  5.391847e-25 7.316927e-01 5.487228e-01 1.000000e+00
 
-## 2D Smooths and Spatial Data
+# 2D Smooths and Spatial Data
 
 **Interactions**
 
@@ -480,7 +536,7 @@ coef(mod2d)
     ##     s(dist).7     s(dist).8     s(dist).9 
     ##   1.741270916 -14.740087405  -7.238887581
 
-## Plotting GAM Interactions
+### Plotting GAM Interactions
 
 `mgcv::plot()` contains basic plotting options for interactions.
 
@@ -491,21 +547,21 @@ coef(mod2d)
 plot(mod2d, select=c(1))
 ```
 
-![](GAMs_files/figure-gfm/unnamed-chunk-19-1.png)<!-- -->
+![](GAMs_files/figure-gfm/unnamed-chunk-21-1.png)<!-- -->
 
 ``` r
 # 3d perspective plot 
 plot(mod2d, select=c(1), scheme = 1)
 ```
 
-![](GAMs_files/figure-gfm/unnamed-chunk-19-2.png)<!-- -->
+![](GAMs_files/figure-gfm/unnamed-chunk-21-2.png)<!-- -->
 
 ``` r
 # heat map - yellow = larger prediction
 plot(mod2d, select=c(1), scheme = 2)
 ```
 
-![](GAMs_files/figure-gfm/unnamed-chunk-19-3.png)<!-- -->
+![](GAMs_files/figure-gfm/unnamed-chunk-21-3.png)<!-- -->
 
 `vis.gam()` offers more options for customizing.
 
@@ -529,7 +585,7 @@ vis.gam(x, # model
         ...)
 ```
 
-## Visualizing Categorical-Continuous Interactions
+### Visualizing Categorical-Continuous Interactions
 
 **Factor-smooth**
 
@@ -582,25 +638,25 @@ mod_fs <- gam(copper ~ s(dist, landuse, bs="fs"), data = meuse, method = "REML")
 plot(mod_sep, pages=1)
 ```
 
-![](GAMs_files/figure-gfm/unnamed-chunk-22-1.png)<!-- -->
+![](GAMs_files/figure-gfm/unnamed-chunk-24-1.png)<!-- -->
 
 ``` r
 plot(mod_fs, pages=1)
 ```
 
-![](GAMs_files/figure-gfm/unnamed-chunk-22-2.png)<!-- -->
+![](GAMs_files/figure-gfm/unnamed-chunk-24-2.png)<!-- -->
 
 ``` r
 vis.gam(mod_sep, view=c("dist", "landuse", plot.type="persp"))
 ```
 
-![](GAMs_files/figure-gfm/unnamed-chunk-22-3.png)<!-- -->
+![](GAMs_files/figure-gfm/unnamed-chunk-24-3.png)<!-- -->
 
 ``` r
 vis.gam(mod_fs, view=c("dist", "landuse", plot.type="persp"))
 ```
 
-![](GAMs_files/figure-gfm/unnamed-chunk-22-4.png)<!-- -->
+![](GAMs_files/figure-gfm/unnamed-chunk-24-4.png)<!-- -->
 
 ## Interactions with Different Scales : Tensor Smooths
 
@@ -657,13 +713,13 @@ summary(tensor_mod)
 plot(mod2d, select = c(1), scheme = 2)
 ```
 
-![](GAMs_files/figure-gfm/unnamed-chunk-23-1.png)<!-- -->
+![](GAMs_files/figure-gfm/unnamed-chunk-25-1.png)<!-- -->
 
 ``` r
 plot(tensor_mod)
 ```
 
-![](GAMs_files/figure-gfm/unnamed-chunk-23-2.png)<!-- -->
+![](GAMs_files/figure-gfm/unnamed-chunk-25-2.png)<!-- -->
 
 ``` r
 # using tensor interactions to separate independent and interacting effects of variables 
@@ -700,4 +756,175 @@ summary(tensor_mod2)
 plot(tensor_mod2, pages=1)
 ```
 
-![](GAMs_files/figure-gfm/unnamed-chunk-23-3.png)<!-- -->
+![](GAMs_files/figure-gfm/unnamed-chunk-25-3.png)<!-- -->
+
+# Logistic GAMs for Classification
+
+-   GAMs can model many types of outcomes besides continuous numeric
+    values
+
+**Logistic Functions**
+
+-   when modelling binary outcomes, model prediction will be a
+    probability between 0 and 1
+    -   GAMs can have an outcome of any number => convert GAM output to
+        a probability with logistic function
+-   transformation converting numbers of any value to probabilities
+    -   **log-odds**: log of the ratio of positive outcomes to negative
+        outcomes
+    -   `plogis()`
+-   **logit function**: inverse of logistic function, translates
+    probabilities to log-odds
+    -   `qlogis()`
+
+``` r
+# logit and logistic functions are inverts of each other 
+qlogis(plogis(.5))
+```
+
+    ## [1] 0.5
+
+``` r
+# a .25 probability converts to log odds by taking log of ratio of positives (1) to negatives (3)
+qlogis(.25) == log(1/3)
+```
+
+    ## [1] TRUE
+
+to use logistic/logit function to fit a GAM, add `family=binomial`
+argument to GAM call \* outputs are on the log-odds scale -> must
+convert to probabilities using logistic function
+
+``` r
+# we are using the nycflights 13 dataset also used in recipe_example.md
+# examine csale data frame
+head(flights)
+```
+
+    ## # A tibble: 6 × 10
+    ##   dep_time flight origin dest  air_time distance carrier date       arr_delay
+    ##      <int>  <int> <fct>  <fct>    <dbl>    <dbl> <fct>   <date>     <fct>    
+    ## 1      517   1545 EWR    IAH        227     1400 UA      2013-01-01 on_time  
+    ## 2      533   1714 LGA    IAH        227     1416 UA      2013-01-01 on_time  
+    ## 3      542   1141 JFK    MIA        160     1089 AA      2013-01-01 late     
+    ## 4      544    725 JFK    BQN        183     1576 B6      2013-01-01 on_time  
+    ## 5      554    461 LGA    ATL        116      762 DL      2013-01-01 on_time  
+    ## 6      554   1696 EWR    ORD        150      719 UA      2013-01-01 on_time  
+    ## # … with 1 more variable: time_hour <dttm>
+
+``` r
+str(flights)
+```
+
+    ## tibble [327,346 × 10] (S3: tbl_df/tbl/data.frame)
+    ##  $ dep_time : int [1:327346] 517 533 542 544 554 554 555 557 557 558 ...
+    ##  $ flight   : int [1:327346] 1545 1714 1141 725 461 1696 507 5708 79 301 ...
+    ##  $ origin   : Factor w/ 3 levels "EWR","JFK","LGA": 1 3 2 2 3 1 1 3 2 3 ...
+    ##  $ dest     : Factor w/ 104 levels "ABQ","ACK","ALB",..: 44 44 58 13 5 69 36 43 54 69 ...
+    ##  $ air_time : num [1:327346] 227 227 160 183 116 150 158 53 140 138 ...
+    ##  $ distance : num [1:327346] 1400 1416 1089 1576 762 ...
+    ##  $ carrier  : Factor w/ 16 levels "9E","AA","AS",..: 12 12 2 4 5 12 4 6 4 2 ...
+    ##  $ date     : Date[1:327346], format: "2013-01-01" "2013-01-01" ...
+    ##  $ arr_delay: Factor w/ 2 levels "late","on_time": 2 2 1 2 2 2 2 2 2 2 ...
+    ##  $ time_hour: POSIXct[1:327346], format: "2013-01-01 05:00:00" "2013-01-01 05:00:00" ...
+    ##  - attr(*, "na.action")= 'omit' Named int [1:9430] 472 478 616 644 726 734 755 839 840 841 ...
+    ##   ..- attr(*, "names")= chr [1:9430] "472" "478" "616" "644" ...
+
+``` r
+# fit logistic model of arr_delay as a function of air_time
+log_mod <- gam(arr_delay ~ s(air_time), data = flights, family = binomial, method = "REML")
+
+# calculating the probability at the mean
+plogis(coef(log_mod)[1])
+```
+
+    ## (Intercept) 
+    ##   0.8399921
+
+### Visualizing Logistic GAMs
+
+When we plot the output of a logistic GAM we see the partial effect of
+smooths on the log-odds scale \* use `trans = plogis` argument to
+convert output to probability scale \* plotted results will be centered
+on .5 probability – to include average intercept, use
+`shift = coef(binom_mod)[1]` \* also good to use `seWithMean = TRUE`
+
+``` r
+plot(log_mod, 
+     trans=plogis, 
+     shift=coef(log_mod)[1], 
+     seWithMean=TRUE,
+     rug = FALSE,
+     shade = TRUE, 
+     shade.col = "pink")
+```
+
+![](GAMs_files/figure-gfm/unnamed-chunk-29-1.png)<!-- -->
+
+# Predicting with GAMs
+
+We can use the `predict()` function to make predictions from a GAM
+object.
+
+``` r
+# running predict on the model yields a vector of predictions for training data 
+head(predict (log_mod))
+```
+
+    ##        1        2        3        4        5        6 
+    ## 1.517060 1.517060 1.687852 1.648804 1.600378 1.682537
+
+By default, predict() function returns values on `type="link"` scale -
+scale on which model was fit to data. \* return results on probability
+scale by using `type = "response"`
+
+`se.fit = TRUE` includes a second element containing standard error for
+predictions
+
+``` r
+sefitpred <- predict(log_mod, type="response", se.fit=TRUE)
+
+head(sefitpred[[1]])
+```
+
+    ##         1         2         3         4         5         6 
+    ## 0.8201052 0.8201052 0.8439415 0.8387293 0.8320712 0.8432401
+
+``` r
+head(sefitpred[[2]])
+```
+
+    ##           1           2           3           4           5           6 
+    ## 0.002569087 0.002569087 0.001303659 0.001677157 0.001123903 0.001248512
+
+**Notes on logistic standard error**
+
+-   Standard error for probabilities are approximate when using the
+    probability scale, as errors are non-symmetrical
+-   best way to create confidence intervals for logistic predictions is
+    to build on log-odds scale and then convert to probability
+    -   `plogis("link" predictions + errors)`
+
+Use `type = "terms"` to produce a matrix showing contribution of each
+smooth to each prediction \* sum across each row is the overall
+probability
+
+``` r
+head(predict(log_mod, type = "terms"))
+```
+
+    ##    s(air_time)
+    ## 1 -0.141109471
+    ## 2 -0.141109471
+    ## 3  0.029682544
+    ## 4 -0.009365661
+    ## 5 -0.057791602
+    ## 6  0.024367163
+
+### Predictions on new data
+
+-   to make predictions on new data, use `newdata` argument
+
+``` r
+test_predictions <- predict(trained_model, type = "response", newdata = test_df)
+```
