@@ -1,0 +1,79 @@
+---
+title: "MaxEnt"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+* Introduction
+  * Presence vs. Presence-Absence
+  * Statistical Explanation
+* When to Use MaxEnt
+* Using MaxEnt and TidyModels 
+
+# Introduction and Theory #
+
+https://onlinelibrary.wiley.com/doi/epdf/10.1111/j.1472-4642.2010.00725.x
+
+MaxEnt is a modeling technique for presence-only datasets. 
+
+**Terms**: 
+
+* *L*: landscape of interest
+* **z**: vector of environmental covariates
+* *f*(**z**) : probability desnity of covariates across *L*
+  * *f*₁(**z**) : density in locations w/in L where species is present
+  * *f*₀(**z**) : density in locations w/in L where species is absent 
+    * cannot be estimated from presence-only data 
+* Pr(y = 1 | **z**): probability of presence of the species based on env 
+
+Baye's Theorem: Pr(y = 1 | **z**) = *f*₁(**z**)Pr(y = 1) / *f*(**z**) 
+
+### Presence vs. Presence-Absence ###
+
+* Absence data is often unreliable - species are not perfectly detectable and may not occupy all suitable habitat. 
+  * this unreliability still carries over to presence data (lack of presence in that area)
+* Presence-only data cannot yield **prevalence**: Pr(y=1), the proportion of occupied sites in the landscape
+* **sample selection bias** (when some areas are sampled more than others) has greatly affects presence-only models
+  * if *f*₁(**z**) is contaminated by ss bias *s*(**z**), model will give estimate of *f*₁(**z**)*s*(**z**), not *f*₁(**z**)
+  * in presence-absence data, ss bias affects both presence and absence and will cancel out
+* Presence data often doesn't have an associated temporal or spatial scale needed to properly define the response variable.
+
+### Statistical Explanation ###
+
+* MaxEnt finds a nonlinear fitted function defined over many **features** 
+  * features have six classes: linear, product, quadratic, hinge, threshold, and categorical 
+  * there will be more features than covariates
+  * features are selected by the model in a similar way to regression (choosing the most impactful feature)
+
+* MaxEnt compares the env covariate distributions of the presence data to the env covariate distributions of a random sample of background points from *L*
+  * this assumes that the presence data is a random sample of *L* as well
+  
+The paper describes this in significantly more depth than I am, and on another day I should dive deeper into MaxEnt's inner workings
+
+# When to Use MaxEnt #
+
+**If you have presence-absence data, use that instead. MaxEnt has to make compromises for presence-only data that presence-absence models don't need to bother with.**
+
+* MaxEnt relies on an unbiased sample (like all SDMs). 
+  * can provide background data with similar biases to presence data 
+  * use bias grid indicating biases in survey data - scaled by relative survey effort 
+* MaxEnt assumes equal area cells -> be sure to compensate for unprojected covariate grids
+* Background should include full range of species and exclude areas that have definitely not been searched 
+  * exception is areas that unambiguously do not contain the species 
+* If there are fewer samples, the number of features available to utilize should be reduced 
+* Using only hinge geatures will produce a model similar to a GAM, with smooth fitted functions 
+* It is less crucial to remove correlated variables in MaxEnt, but could still be useful.
+* Must be careful when using MaxEnt to compare different species bc of possible differences in sampling effort 
+
+
+
+
+
+
+
+
+
+
