@@ -4,7 +4,7 @@ library(randomForest)
 
 # reading in the data 
 dataset <- c("amo.csv", "gsi.csv", "nao.csv", "herring.csv") |>
-  lapply(readr::read_csv) |>
+  lapply(function(x) readr::read_csv(file.path("data", x))) |>
   purrr::reduce(function(x, y) merge(x, y, by = "Year")) |>
   select(Year, Pounds, starts_with("mean"))
 
