@@ -1,3 +1,3 @@
 # Bigelow
 
-Personal notes and log of work completed during Bigelow internship.
+Personal notes for R and tidymodels techniques acquired during Bigelow research coop. 
